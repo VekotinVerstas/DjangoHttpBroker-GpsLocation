@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 
 import pytz
 from django.conf import settings
@@ -12,6 +13,8 @@ from broker.utils import (
     basicauth
 )
 from owntracks.models import Trackpoint
+
+logger = logging.getLogger('owntracks')
 
 """
 Data sent by OwnTracks may look like this:
@@ -30,27 +33,36 @@ def save_trackpoint(datalogger, data):
         timestamp = pytz.UTC.localize(timestamp)
     except (ValueError, KeyError) as err:
         msg = f'Invalid timestamp data: ({err}'
+        logger.error(msg)
         raise ValueError(msg)
     try:
         lat = float(data['lat'])
         lon = float(data['lon'])
     except (ValueError, KeyError) as err:
         msg = f'Invalid lat/lon data: ({err}'
+        logger.error(msg)
         raise ValueError(msg)
-    tp, created = Trackpoint.objects.get_or_create(datalogger=datalogger, time=timestamp)
-    tp.lat = lat
-    tp.lon = lon
+
+    if Trackpoint.objects.filter(datalogger=datalogger, time=timestamp).count() == 0:
+        tp = Trackpoint(datalogger=datalogger, time=timestamp, lat=lat, lon=lon)
+    else:
+        return
+    #tp = Trackpoint(datalogger=datalogger, time=timestamp)
+    #tp.lat = lat
+    #tp.lon = lon
     for key in ["acc", "alt", "batt", "vac", "vel"]:
         try:
             val = float(data[key])
             setattr(tp, key, val)
         except (ValueError, KeyError) as err:
+            logger.error(msg)
             continue
     for key in ["tid", "conn"]:
         try:
             val = data[key]
             setattr(tp, key, val)
         except (ValueError, KeyError) as err:
+            logger.error(msg)
             continue
     tp.save()
 
@@ -83,4 +95,6 @@ class OwnTracksEndpoint(EndpointProvider):
             response_msg = {'status': 'ok'}
         except ValueError as err:
             response_msg = {'status': 'error', 'msg': err}
+        response_msg = {}
         return HttpResponse(json.dumps(response_msg), content_type='application/json')
+
