@@ -55,14 +55,14 @@ def save_trackpoint(datalogger, data):
             val = float(data[key])
             setattr(tp, key, val)
         except (ValueError, KeyError) as err:
-            logger.error(msg)
+            logger.error(err)
             continue
     for key in ["tid", "conn"]:
         try:
             val = data[key]
             setattr(tp, key, val)
         except (ValueError, KeyError) as err:
-            logger.error(msg)
+            logger.error(err)
             continue
     tp.save()
 
@@ -74,6 +74,7 @@ class OwnTracksEndpoint(EndpointProvider):
         if request.method != 'POST':
             return HttpResponse('Only POST with JSON body is allowed', status=405)
         serialised_request = serialize_django_request(request)
+        print(serialised_request)
         # TODO: check authentication
         uname, passwd, user = basicauth(request)
         username = request.META.get('HTTP_X_LIMIT_U')

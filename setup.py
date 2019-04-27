@@ -6,9 +6,9 @@ from shutil import rmtree
 from setuptools import find_packages, setup
 
 # Package meta-data.
-NAME = 'owntracks'
-DESCRIPTION = 'OwnTracks plugin for DjangoHttpBroker project.'
-URL = 'https://github.com/VekotinVerstas/DjangoHttpBroker-OwnTracks'
+NAME = 'gpslocation'
+DESCRIPTION = 'GPS location plugin for DjangoHttpBroker project.'
+URL = 'https://github.com/VekotinVerstas/DjangoHttpBroker-GpsLocation'
 EMAIL = 'aapris@gmail.com'
 AUTHOR = 'Aapo Rista'
 REQUIRES_PYTHON = '>=3.6.0'
