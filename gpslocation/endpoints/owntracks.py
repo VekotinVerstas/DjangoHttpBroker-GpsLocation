@@ -12,9 +12,9 @@ from broker.utils import (
     serialize_django_request, data_pack, send_message,
     basicauth
 )
-from owntracks.models import Trackpoint
+from gpslocation.models import Trackpoint
 
-logger = logging.getLogger('owntracks')
+logger = logging.getLogger('gpslocation')
 
 """
 Data sent by OwnTracks may look like this:
@@ -26,7 +26,15 @@ Data sent by OwnTracks may look like this:
 """
 
 
-def save_trackpoint(datalogger, data):
+def set_field(tp, key, field, data):
+    try:
+        val = float(data[key])
+        setattr(tp, field, val)
+    except (ValueError, KeyError) as err:
+        pass
+
+
+def create_trackpoint(datalogger, data, save=True):
     # TODO: test with invalid data and implement some tests in test.py
     try:
         timestamp = datetime.datetime.utcfromtimestamp(data['tst'])
@@ -44,27 +52,17 @@ def save_trackpoint(datalogger, data):
         raise ValueError(msg)
 
     if Trackpoint.objects.filter(datalogger=datalogger, time=timestamp).count() == 0:
-        tp = Trackpoint(datalogger=datalogger, time=timestamp, lat=lat, lon=lon)
+        trkpt = Trackpoint(datalogger=datalogger, time=timestamp, lat=lat, lon=lon)
     else:
         return
-    #tp = Trackpoint(datalogger=datalogger, time=timestamp)
-    #tp.lat = lat
-    #tp.lon = lon
-    for key in ["acc", "alt", "batt", "vac", "vel"]:
-        try:
-            val = float(data[key])
-            setattr(tp, key, val)
-        except (ValueError, KeyError) as err:
-            logger.error(err)
-            continue
-    for key in ["tid", "conn"]:
-        try:
-            val = data[key]
-            setattr(tp, key, val)
-        except (ValueError, KeyError) as err:
-            logger.error(err)
-            continue
-    tp.save()
+    # Map OwnTracks data format to Trackpoint model's fields
+    set_field(trkpt, 'acc', 'hacc', data)
+    set_field(trkpt, 'alt', 'ele', data)
+    set_field(trkpt, 'vac', 'vacc', data)
+    set_field(trkpt, 'vel', 'speed', data)
+    if save:
+        trkpt.save()
+    return trkpt
 
 
 class OwnTracksEndpoint(EndpointProvider):
@@ -85,17 +83,20 @@ class OwnTracksEndpoint(EndpointProvider):
         serialised_request['devid'] = devid
         serialised_request['time'] = datetime.datetime.utcnow().isoformat() + 'Z'
         message = data_pack(serialised_request)
-        key = create_routing_key('owntracks', devid)
+        key = create_routing_key('gpslocation', devid)
         send_message(settings.RAW_HTTP_EXCHANGE, key, message)
         ok, body = decode_json_body(serialised_request['request.body'])
         if ok is False:
             return HttpResponse(f'JSON ERROR: {body}', status=400, content_type='text/plain')
         datalogger, created = get_datalogger(devid=devid, update_activity=True)
         try:
-            save_trackpoint(datalogger, body)
-            response_msg = {'status': 'ok'}
+            trkpt = create_trackpoint(datalogger, body, save=False)
+            if user:
+                trkpt.user = user
+                trkpt.save()
+            # response_msg = {'status': 'ok'}
         except ValueError as err:
-            response_msg = {'status': 'error', 'msg': err}
-        response_msg = {}
+            logger.error(err)
+            # response_msg = {'status': 'error', 'msg': err}
+        response_msg = {}  # Response just with empty json object
         return HttpResponse(json.dumps(response_msg), content_type='application/json')
-
