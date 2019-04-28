@@ -42,8 +42,14 @@ def create_gpx_file(trkpts):
     gpx.tracks.append(gpx_track)
     gpx_segment = gpxpy.gpx.GPXTrackSegment()
     gpx_track.segments.append(gpx_segment)
+    # prev_time = pytz.UTC.localize(datetime.datetime.utcfromtimestamp(0))
+    prev_time = trkpts[0].time
     for trkpt in trkpts:
+        if (trkpt.time - prev_time).seconds > 5*60:
+            gpx_segment = gpxpy.gpx.GPXTrackSegment()
+            gpx_track.segments.append(gpx_segment)
         gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(trkpt.lat, trkpt.lon, time=trkpt.time, elevation=trkpt.ele))
+        prev_time = trkpt.time
     return gpx.to_xml()
 
 
