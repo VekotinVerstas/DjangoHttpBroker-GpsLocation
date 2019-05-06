@@ -45,7 +45,7 @@ def create_gpx_file(trkpts):
     # prev_time = pytz.UTC.localize(datetime.datetime.utcfromtimestamp(0))
     prev_time = trkpts[0].time
     for trkpt in trkpts:
-        if (trkpt.time - prev_time).seconds > 5*60:
+        if (trkpt.time - prev_time).seconds > 5 * 60:
             gpx_segment = gpxpy.gpx.GPXTrackSegment()
             gpx_track.segments.append(gpx_segment)
         gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(trkpt.lat, trkpt.lon, time=trkpt.time, elevation=trkpt.ele))
@@ -63,6 +63,7 @@ class Command(BaseCommand):
                             default="1d")
         parser.add_argument('-o', '--outformat', default='gpx', choices=['gpx', 'csv', ], help='Output format')
         parser.add_argument('-O', '--outfile', help='Output destination (filename)')
+        parser.add_argument('-dl', '--datalogger', type=int, required=True, help='Datalogger id')
 
     def handle(self, *args, **options):
         endtime = create_datetime(options['endtime'], hourly=False)
@@ -71,14 +72,22 @@ class Command(BaseCommand):
             starttime = create_datetime(options['starttime'], hourly=False)
         else:
             starttime = endtime - datetime.timedelta(seconds=timelength)
-        trkpts = Trackpoint.objects.filter(time__gte=starttime, time__lte=endtime).order_by('time')
+        datalogger_id = options['datalogger']
+        trkpts = Trackpoint.objects.filter(datalogger__id=datalogger_id)
+        if trkpts.count() == 0:
+            self.stderr.write(self.style.ERROR(f'Datalogger id {datalogger_id} does not exist :('))
+            self.stderr.write(self.style.NOTICE('Try one of these:'))
+            for dl in Trackpoint.objects.values('datalogger__devid', 'datalogger__id').distinct():
+                self.stderr.write(self.style.NOTICE(f"{dl['datalogger__id']} {dl['datalogger__devid']}"))
+            exit()
+        trkpts = trkpts.filter(time__gte=starttime, time__lte=endtime).order_by('time')
         if options['outformat'] == 'gpx':
             outdata = create_gpx_file(trkpts)
         if options['outformat'] == 'csv':
-            print("not implemented yet")
+            self.stderr.write(self.style.WARNING('Sorry, not implemented yet'))
             exit()
         if options['outfile'] is None:
-            print(outdata)
+            self.stderr.write(outdata)
         else:
             with open(options['outfile'], 'wt') as f:
                 f.write(outdata)
